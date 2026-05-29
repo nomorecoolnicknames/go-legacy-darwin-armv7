@@ -4,6 +4,8 @@
 
 package cpu
 
+import "internal/goos"
+
 const CacheLinePadSize = 32
 
 // arm doesn't have a 'cpuid' equivalent, so we rely on HWCAP/HWCAP2.
@@ -25,6 +27,10 @@ func doinit() {
 		{Name: "vfpv4", Feature: &ARM.HasVFPv4},
 		{Name: "idiva", Feature: &ARM.HasIDIVA},
 		{Name: "v7atomics", Feature: &ARM.HasV7Atomics},
+	}
+
+	if goos.IsDarwin != 0 {
+		return
 	}
 
 	// HWCAP feature bits

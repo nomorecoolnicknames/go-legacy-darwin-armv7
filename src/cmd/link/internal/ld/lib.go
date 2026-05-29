@@ -3019,7 +3019,7 @@ func AddGotSym(target *Target, ldr *loader.Loader, syms *ArchSyms, s loader.Sym,
 	} else if target.IsDarwin() {
 		leg := ldr.MakeSymbolUpdater(syms.LinkEditGOT)
 		leg.AddUint32(target.Arch, uint32(ldr.SymDynid(s)))
-		if target.IsPIE() && target.IsInternal() {
+		if target.IsInternal() && (target.IsPIE() || target.IsARM()) {
 			// Mach-O relocations are a royal pain to lay out.
 			// They use a compact stateful bytecode representation.
 			// Here we record what are needed and encode them later.

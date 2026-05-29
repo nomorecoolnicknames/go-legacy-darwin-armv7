@@ -116,6 +116,10 @@ func traceStopReadCPU() {
 // Must not run on the system stack because profBuf.read performs race
 // operations.
 func traceReadCPU(gen uintptr) bool {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return false
+	}
+
 	var pcBuf [tracev2.MaxFramesPerStack]uintptr
 
 	data, tags, eof := trace.cpuLogRead[gen%2].read(profBufNonBlocking)

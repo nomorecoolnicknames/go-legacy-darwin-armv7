@@ -105,5 +105,14 @@ func archinit(ctxt *ld.Link) {
 		if *ld.FlagTextAddr == -1 {
 			*ld.FlagTextAddr = ld.Rnd(0x10000, *ld.FlagRound) + int64(ld.HEADR)
 		}
+
+	case objabi.Hdarwin: /* apple MACH */
+		ld.HEADR = ld.INITIAL_MACHO_HEADR
+		if *ld.FlagRound == -1 {
+			*ld.FlagRound = 4096
+		}
+		if *ld.FlagTextAddr == -1 {
+			*ld.FlagTextAddr = ld.Rnd(4096, *ld.FlagRound) + int64(ld.HEADR)
+		}
 	}
 }

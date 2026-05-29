@@ -7,6 +7,7 @@ package signal
 import (
 	"context"
 	"os"
+	"runtime"
 	"slices"
 	"sync"
 )
@@ -122,6 +123,9 @@ var (
 func Notify(c chan<- os.Signal, sig ...os.Signal) {
 	if c == nil {
 		panic("os/signal: Notify using nil channel")
+	}
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm" {
+		return
 	}
 
 	handlers.Lock()

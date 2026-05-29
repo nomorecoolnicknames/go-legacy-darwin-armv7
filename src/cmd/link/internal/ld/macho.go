@@ -127,6 +127,7 @@ const (
 
 	MH_NOUNDEFS = 0x1
 	MH_DYLDLINK = 0x4
+	MH_TWOLEVEL = 0x80
 	MH_PIE      = 0x200000
 )
 
@@ -328,6 +329,12 @@ func machowrite(ctxt *Link, arch *sys.Arch, out *OutBuf, linkmode LinkMode) int 
 	if ctxt.IsPIE() && linkmode == LinkInternal {
 		flags |= MH_PIE | MH_DYLDLINK
 	}
+	if ctxt.Arch.Family == sys.ARM && linkmode == LinkInternal {
+		flags |= MH_NOUNDEFS | MH_DYLDLINK | MH_TWOLEVEL
+		if ctxt.IsPIE() {
+			flags |= MH_PIE
+		}
+	}
 	out.Write32(flags) /* flags */
 	if arch.PtrSize == 8 {
 		out.Write32(0) /* reserved */
@@ -424,8 +431,14 @@ func (ctxt *Link) domacho() {
 	}
 	if machoPlatform == 0 {
 		machoPlatform = PLATFORM_MACOS
-		if buildcfg.GOOS == "ios" {
+		if buildcfg.GOOS == "ios" || ctxt.Arch.Family == sys.ARM {
 			machoPlatform = PLATFORM_IOS
+		}
+		if ctxt.LinkMode == LinkInternal && machoPlatform == PLATFORM_IOS && ctxt.Arch.Family == sys.ARM {
+			version := uint32(6<<16 | 0<<8 | 0<<0) // iPhoneOS 6.0.0 floor for legacy devices.
+			ml := newMachoLoad(ctxt.Arch, imacho.LC_VERSION_MIN_IPHONEOS, 2)
+			ml.data[0] = version // OS version
+			ml.data[1] = version // SDK version
 		}
 		if ctxt.LinkMode == LinkInternal && machoPlatform == PLATFORM_MACOS {
 			var version uint32
@@ -589,7 +602,14 @@ func machoshbits(ctxt *Link, mseg *MachoSeg, sect *sym.Section, segname string) 
 		msect.name = "__symbol_stub1"
 		msect.flag = S_ATTR_PURE_INSTRUCTIONS | S_ATTR_SOME_INSTRUCTIONS | S_SYMBOL_STUBS
 		msect.res1 = 0 //nkind[SymKindLocal];
-		msect.res2 = 6
+		switch ctxt.Arch.Family {
+		case sys.ARM:
+			msect.res2 = 16
+		case sys.ARM64:
+			msect.res2 = 12
+		default:
+			msect.res2 = 6
+		}
 	}
 
 	if sect.Name == ".got" {
@@ -641,6 +661,10 @@ func asmbMacho(ctxt *Link) {
 	case sys.AMD64:
 		mh.cpu = MACHO_CPU_AMD64
 		mh.subcpu = MACHO_SUBCPU_X86
+
+	case sys.ARM:
+		mh.cpu = MACHO_CPU_ARM
+		mh.subcpu = MACHO_SUBCPU_ARMV7
 
 	case sys.ARM64:
 		mh.cpu = MACHO_CPU_ARM64
@@ -732,6 +756,12 @@ func asmbMacho(ctxt *Link) {
 		default:
 			Exitf("unknown macho architecture: %v", ctxt.Arch.Family)
 
+		case sys.ARM:
+			ml := newMachoLoad(ctxt.Arch, imacho.LC_UNIXTHREAD, 17+2)
+			ml.data[0] = 1                           /* thread type */
+			ml.data[1] = 17                          /* word count */
+			ml.data[2+15] = uint32(Entryvalue(ctxt)) /* start pc */
+
 		case sys.AMD64:
 			ml := newMachoLoad(ctxt.Arch, imacho.LC_UNIXTHREAD, 42+2)
 			ml.data[0] = 4                           /* thread type */
@@ -769,7 +799,7 @@ func asmbMacho(ctxt *Link) {
 			codesigOff = linkoff + s1 + s2 + s3 + s4 + s5 + s6
 		}
 
-		if ctxt.LinkMode != LinkExternal && ctxt.IsPIE() {
+		if ctxt.LinkMode != LinkExternal && (ctxt.IsPIE() || ctxt.Arch.Family == sys.ARM) {
 			ml := newMachoLoad(ctxt.Arch, imacho.LC_DYLD_INFO_ONLY, 10)
 			ml.data[0] = uint32(linkoff)      // rebase off
 			ml.data[1] = uint32(s1)           // rebase size
@@ -1363,7 +1393,7 @@ func machoDyldInfo(ctxt *Link) {
 	rebase := ldr.CreateSymForUpdate(".machorebase", 0)
 	bind := ldr.CreateSymForUpdate(".machobind", 0)
 
-	if !(ctxt.IsPIE() && ctxt.IsInternal()) {
+	if !ctxt.IsInternal() || (!ctxt.IsPIE() && ctxt.Arch.Family != sys.ARM) {
 		return
 	}
 

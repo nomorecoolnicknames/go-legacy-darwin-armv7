@@ -3,6 +3,19 @@
 Go is an open source programming language that makes it easy to build simple,
 reliable, and efficient software.
 
+## Legacy Darwin/ARM fork
+
+This fork carries an experimental modern Go toolchain backport for legacy
+`GOOS=darwin GOARCH=arm GOARM=7` targets, primarily jailbroken armv7 iOS
+devices. It is intended to build the companion
+[`sing-box-legacy`](https://github.com/nomorecoolnicknames/sing-box-legacy)
+engine fork; upstream Go no longer ships a working modern `darwin/arm` port.
+
+The fork is source-only. Build products such as `bin/`, `pkg/`, local caches,
+and environment scripts are intentionally not committed. See
+[`LEGACY_DARWIN_ARM.md`](LEGACY_DARWIN_ARM.md) for the supported scope and build
+notes.
+
 ![Gopher image](https://golang.org/doc/gopher/fiveyears.jpg)
 *Gopher image by [Renee French][rf], licensed under [Creative Commons 4.0 Attribution license][cc4-by].*
 

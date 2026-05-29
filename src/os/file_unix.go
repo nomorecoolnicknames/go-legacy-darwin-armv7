@@ -222,6 +222,9 @@ func newFile(fd int, name string, kind newFileKind, nonBlocking bool) *File {
 		}
 	}
 
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm" {
+		return f
+	}
 	runtime.SetFinalizer(f.file, (*file).close)
 	return f
 }

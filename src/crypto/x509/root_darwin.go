@@ -59,27 +59,19 @@ func (c *Certificate) systemVerify(opts *VerifyOptions) (chains [][]*Certificate
 	// always enforce its SCT requirements, and there are still _some_ people
 	// using TLS or OCSP for that.
 
-	if ret, err := macos.SecTrustEvaluateWithError(trustObj); err != nil {
-		switch ret {
-		case macos.ErrSecCertificateExpired:
-			return nil, CertificateInvalidError{c, Expired, err.Error()}
-		case macos.ErrSecHostNameMismatch:
-			return nil, HostnameError{c, opts.DNSName}
-		case macos.ErrSecNotTrusted:
-			return nil, UnknownAuthorityError{Cert: c}
-		default:
-			return nil, fmt.Errorf("x509: %s", err)
-		}
+	result, err := macos.SecTrustEvaluate(trustObj)
+	if err != nil {
+		return nil, fmt.Errorf("x509: %s", err)
+	}
+	switch int(result) {
+	case macos.SecTrustResultProceed, macos.SecTrustResultUnspecified:
+	default:
+		return nil, UnknownAuthorityError{Cert: c}
 	}
 
 	chain := [][]*Certificate{{}}
-	chainRef, err := macos.SecTrustCopyCertificateChain(trustObj)
-	if err != nil {
-		return nil, err
-	}
-	defer macos.CFRelease(chainRef)
-	for i := 0; i < macos.CFArrayGetCount(chainRef); i++ {
-		certRef := macos.CFArrayGetValueAtIndex(chainRef, i)
+	for i := 0; i < macos.SecTrustGetCertificateCount(trustObj); i++ {
+		certRef := macos.SecTrustGetCertificateAtIndex(trustObj, i)
 		cert, err := exportCertificate(certRef)
 		if err != nil {
 			return nil, err

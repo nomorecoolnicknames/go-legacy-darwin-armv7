@@ -185,7 +185,7 @@ func BuildModeSupported(compiler, buildmode, goos, goarch string) bool {
 		case "linux/386", "linux/amd64", "linux/arm", "linux/arm64", "linux/loong64", "linux/ppc64le", "linux/riscv64", "linux/s390x",
 			"android/amd64", "android/arm", "android/arm64", "android/386",
 			"freebsd/amd64",
-			"darwin/amd64", "darwin/arm64",
+			"darwin/amd64", "darwin/arm", "darwin/arm64",
 			"ios/amd64", "ios/arm64",
 			"aix/ppc64",
 			"openbsd/arm64",
@@ -219,7 +219,7 @@ func BuildModeSupported(compiler, buildmode, goos, goarch string) bool {
 func InternalLinkPIESupported(goos, goarch string) bool {
 	switch goos + "/" + goarch {
 	case "android/arm64",
-		"darwin/amd64", "darwin/arm64",
+		"darwin/amd64", "darwin/arm", "darwin/arm64",
 		"linux/amd64", "linux/arm64", "linux/loong64", "linux/ppc64le",
 		"windows/386", "windows/amd64", "windows/arm64":
 		return true

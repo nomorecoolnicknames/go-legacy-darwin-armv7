@@ -241,6 +241,10 @@ func pprof_cyclesPerSecond() int64 {
 //
 //go:linkname runtime_pprof_readProfile runtime/pprof.readProfile
 func runtime_pprof_readProfile() ([]uint64, []unsafe.Pointer, bool) {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return nil, nil, true
+	}
+
 	lock(&cpuprof.lock)
 	log := cpuprof.log
 	unlock(&cpuprof.lock)

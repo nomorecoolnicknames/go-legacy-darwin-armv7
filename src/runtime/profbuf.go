@@ -209,6 +209,10 @@ func (b *profBuf) incrementOverflow(now int64) {
 // newProfBuf returns a new profiling buffer with room for
 // a header of hdrsize words and a buffer of at least bufwords words.
 func newProfBuf(hdrsize, bufwords, tags int) *profBuf {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return nil
+	}
+
 	if min := 2 + hdrsize + 1; bufwords < min {
 		bufwords = min
 	}
@@ -305,6 +309,10 @@ func (b *profBuf) canWriteTwoRecords(nstk1, nstk2 int) bool {
 // and a single tag pointer *tagPtr (or nil if tagPtr is nil).
 // No write barriers allowed because this might be called from a signal handler.
 func (b *profBuf) write(tagPtr *unsafe.Pointer, now int64, hdr []uint64, stk []uintptr) {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return
+	}
+
 	if b == nil {
 		return
 	}
@@ -413,6 +421,10 @@ func (b *profBuf) write(tagPtr *unsafe.Pointer, now int64, hdr []uint64, stk []u
 // close signals that there will be no more writes on the buffer.
 // Once all the data has been read from the buffer, reads will return eof=true.
 func (b *profBuf) close() {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return
+	}
+
 	if b.eof.Load() > 0 {
 		throw("runtime: profBuf already closed")
 	}
@@ -424,6 +436,10 @@ func (b *profBuf) close() {
 // atomic fields b.overflow or b.eof.
 // It records the change in b.w and wakes up the reader if needed.
 func (b *profBuf) wakeupExtra() {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return
+	}
+
 	for {
 		old := b.w.load()
 		new := old | profWriteExtra
@@ -453,6 +469,10 @@ const (
 var overflowTag [1]unsafe.Pointer // always nil
 
 func (b *profBuf) read(mode profBufReadMode) (data []uint64, tags []unsafe.Pointer, eof bool) {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return nil, nil, true
+	}
+
 	if b == nil {
 		return nil, nil, true
 	}

@@ -187,6 +187,9 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 		}
 		su := ldr.MakeSymbolUpdater(s)
 		su.SetRelocType(rIdx, objabi.R_ADDR)
+		if target.IsPIE() && target.IsInternal() {
+			break
+		}
 		return true
 
 	case objabi.ElfRelocOffset + objabi.RelocType(elf.R_ARM_PC24),
@@ -204,7 +207,11 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 
 	// Handle references to ELF symbols from our own object files.
 	if targType != sym.SDYNIMPORT {
-		return true
+		if r.Type() == objabi.R_ADDR && target.IsPIE() && target.IsInternal() {
+			// Internal PIE data pointers need dynamic rebasing below.
+		} else {
+			return true
+		}
 	}
 
 	// Reread the reloc to incorporate any changes in type above.
@@ -224,7 +231,12 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 		return true
 
 	case objabi.R_ADDR:
-		if !ldr.SymType(s).IsDATA() {
+		if target.IsPIE() && target.IsInternal() {
+			switch ldr.SymName(s) {
+			case ".dynsym", ".rel", ".rel.plt", ".got.plt", ".dynamic":
+				return false
+			}
+		} else if t := ldr.SymType(s); !t.IsDATA() && !t.IsRODATA() {
 			break
 		}
 		if target.IsElf() {
@@ -235,6 +247,10 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 			su := ldr.MakeSymbolUpdater(s)
 			su.SetRelocType(rIdx, objabi.R_CONST) // write r->add during relocsym
 			su.SetRelocSym(rIdx, 0)
+			return true
+		}
+		if target.IsDarwin() {
+			ld.MachoAddRebase(s, int64(r.Off()))
 			return true
 		}
 
@@ -571,6 +587,8 @@ func archreloc(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, r loade
 			ldr.Errorf(s, "direct call too far: %s %x", ldr.SymName(rs), t)
 		}
 		return int64(braddoff(int32(0xff000000&uint32(r.Add())), int32(0xffffff&t))), noExtReloc, isOk
+	case objabi.R_PCREL:
+		return ldr.SymValue(rs) + r.Add() - (ldr.SymValue(s) + int64(r.Off())), noExtReloc, isOk
 	}
 
 	return val, 0, false
@@ -647,6 +665,22 @@ func addpltsym(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 		rel.AddAddrPlus(target.Arch, got.Sym(), int64(ldr.SymGot(s)))
 
 		rel.AddUint32(target.Arch, elf.R_INFO32(uint32(ldr.SymDynid(s)), uint32(elf.R_ARM_JUMP_SLOT)))
+	} else if target.IsDarwin() {
+		ld.AddGotSym(target, ldr, syms, s, 0)
+
+		sDynid := ldr.SymDynid(s)
+		lep := ldr.MakeSymbolUpdater(syms.LinkEditPLT)
+		lep.AddUint32(target.Arch, uint32(sDynid))
+
+		plt := ldr.MakeSymbolUpdater(syms.PLT)
+		stubOff := plt.Size()
+		ldr.SetPlt(s, int32(stubOff))
+
+		// ldr ip, [pc, #4]; add ip, pc, ip; ldr pc, [ip]; .word &GOT[s]-(pc)
+		plt.AddUint32(target.Arch, 0xe59fc004)
+		plt.AddUint32(target.Arch, 0xe08fc00c)
+		plt.AddUint32(target.Arch, 0xe59cf000)
+		plt.AddPCRelPlus(target.Arch, syms.GOT, int64(ldr.SymGot(s))+4)
 	} else {
 		ldr.Errorf(s, "addpltsym: unsupported binary format")
 	}

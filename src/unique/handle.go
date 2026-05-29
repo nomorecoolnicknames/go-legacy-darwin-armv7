@@ -7,6 +7,8 @@ package unique
 import (
 	"internal/abi"
 	isync "internal/sync"
+	"runtime"
+	"sync"
 	"unsafe"
 )
 
@@ -36,6 +38,9 @@ func Make[T comparable](value T) Handle[T] {
 	if typ.Size() == 0 {
 		return Handle[T]{(*T)(unsafe.Pointer(&zero))}
 	}
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm" {
+		return makeStrong(value, typ)
+	}
 	ma, ok := uniqueMaps.Load(typ)
 	if !ok {
 		m := &uniqueMap[T]{canonMap: newCanonMap[T](), cloneSeq: makeCloneSeq(typ)}
@@ -52,6 +57,29 @@ func Make[T comparable](value T) Handle[T] {
 	return Handle[T]{ptr}
 }
 
+func makeStrong[T comparable](value T, typ *abi.Type) Handle[T] {
+	ma, ok := uniqueStrongMaps.Load(typ)
+	if !ok {
+		m := &uniqueStrongMap[T]{
+			values:   make(map[T]*T),
+			cloneSeq: makeCloneSeq(typ),
+		}
+		ma, _ = uniqueStrongMaps.LoadOrStore(typ, m)
+	}
+	m := ma.(*uniqueStrongMap[T])
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if ptr := m.values[value]; ptr != nil {
+		return Handle[T]{ptr}
+	}
+	cloned := clone(value, &m.cloneSeq)
+	ptr := new(T)
+	*ptr = cloned
+	m.values[cloned] = ptr
+	return Handle[T]{ptr}
+}
+
 // uniqueMaps is an index of type-specific concurrent maps used for unique.Make.
 //
 // The two-level map might seem odd at first since the HashTrieMap could have "any"
@@ -63,7 +91,17 @@ func Make[T comparable](value T) Handle[T] {
 // on those allocations.
 var uniqueMaps isync.HashTrieMap[*abi.Type, any] // any is always a *uniqueMap[T].
 
+// uniqueStrongMaps is a darwin/arm fallback for old iOS runtimes where weak
+// pointers and cleanup/finalizer machinery can hang during package init.
+var uniqueStrongMaps isync.HashTrieMap[*abi.Type, any] // any is always a *uniqueStrongMap[T].
+
 type uniqueMap[T comparable] struct {
 	*canonMap[T]
 	cloneSeq
+}
+
+type uniqueStrongMap[T comparable] struct {
+	mu       sync.Mutex
+	values   map[T]*T
+	cloneSeq cloneSeq
 }

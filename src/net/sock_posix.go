@@ -170,10 +170,10 @@ func (fd *netFD) listenStream(ctx context.Context, laddr sockaddr, backlog int, 
 	if err = listenFunc(fd.pfd.Sysfd, backlog); err != nil {
 		return os.NewSyscallError("listen", err)
 	}
+	lsa, _ = syscall.Getsockname(fd.pfd.Sysfd)
 	if err = fd.init(); err != nil {
 		return err
 	}
-	lsa, _ = syscall.Getsockname(fd.pfd.Sysfd)
 	fd.setAddr(fd.addrFunc()(lsa), nil)
 	return nil
 }

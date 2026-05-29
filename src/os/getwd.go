@@ -32,6 +32,10 @@ func Getwd() (dir string, err error) {
 		dir, err = syscall.Getwd()
 		return dir, NewSyscallError("getwd", err)
 	}
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm" {
+		dir, err = syscall.Getwd()
+		return dir, NewSyscallError("getwd", err)
+	}
 
 	// Clumsy but widespread kludge:
 	// if $PWD is set and matches ".", use it.

@@ -69,10 +69,17 @@ func (f *File) Name() string { return f.name }
 // closing Stderr may cause those messages to go elsewhere, perhaps
 // to a file opened later.
 var (
-	Stdin  = NewFile(uintptr(syscall.Stdin), "/dev/stdin")
-	Stdout = NewFile(uintptr(syscall.Stdout), "/dev/stdout")
-	Stderr = NewFile(uintptr(syscall.Stderr), "/dev/stderr")
+	Stdin  = newFileFromStandardFD(int(syscall.Stdin), "/dev/stdin")
+	Stdout = newFileFromStandardFD(int(syscall.Stdout), "/dev/stdout")
+	Stderr = newFileFromStandardFD(int(syscall.Stderr), "/dev/stderr")
 )
+
+func newFileFromStandardFD(fd int, name string) *File {
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm" {
+		return newFile(fd, name, kindNoPoll, false)
+	}
+	return NewFile(uintptr(fd), name)
+}
 
 // Flags to OpenFile wrapping those of the underlying system. Not all
 // flags may be implemented on a given system.

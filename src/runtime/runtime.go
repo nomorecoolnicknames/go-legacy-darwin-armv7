@@ -29,6 +29,10 @@ type ticksType struct {
 //
 // Must not run concurrently with ticksPerSecond.
 func (t *ticksType) init() {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return
+	}
+
 	lock(&ticks.lock)
 	t.startTime = nanotime()
 	t.startTicks = cputicks()
@@ -75,6 +79,10 @@ const minTimeForTicksPerSecond = 5_000_000*(1-osHasLowResClockInt) + 100_000_000
 // TODO(mknyszek): This doesn't account for things like CPU frequency scaling. Consider
 // a more sophisticated and general approach in the future.
 func ticksPerSecond() int64 {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return 1e9
+	}
+
 	// Get the conversion rate if we've already computed it.
 	r := ticks.val.Load()
 	if r != 0 {
@@ -163,6 +171,9 @@ type godebugInc struct {
 }
 
 func (g *godebugInc) IncNonDefault() {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return
+	}
 	inc := g.inc.Load()
 	if inc == nil {
 		newInc := godebugNewIncNonDefault.Load()

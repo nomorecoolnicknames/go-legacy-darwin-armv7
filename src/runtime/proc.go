@@ -7064,6 +7064,9 @@ var (
 //
 // This is based on forcegchelper.
 func defaultGOMAXPROCSUpdateEnable() {
+	if goos.IsDarwin == 1 && goarch.IsArm == 1 {
+		return
+	}
 	if debug.updatemaxprocs == 0 {
 		// Unconditionally increment the metric when updates are disabled.
 		//

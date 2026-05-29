@@ -36,6 +36,11 @@ var readRandomFailed bool
 // randinit initializes the global random state.
 // It must be called before any use of grand.
 func randinit() {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		globalRand.init = true
+		return
+	}
+
 	lock(&globalRand.lock)
 	if globalRand.init {
 		fatal("randinit twice")
@@ -119,6 +124,10 @@ func allZero(b []byte) bool {
 
 // bootstrapRand returns a random uint64 from the global random generator.
 func bootstrapRand() uint64 {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return uint64(nanotime()) ^ 0xa0761d6478bd642f
+	}
+
 	lock(&globalRand.lock)
 	if !globalRand.init {
 		fatal("randinit missed")
@@ -135,6 +144,10 @@ func bootstrapRand() uint64 {
 // bootstrapRandReseed reseeds the bootstrap random number generator,
 // clearing from memory any trace of previously returned random numbers.
 func bootstrapRandReseed() {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return
+	}
+
 	lock(&globalRand.lock)
 	if !globalRand.init {
 		fatal("randinit missed")
@@ -158,6 +171,10 @@ func rand32() uint32 {
 //go:nosplit
 //go:linkname rand
 func rand() uint64 {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		return uint64(cheaprand())<<32 | uint64(cheaprand())
+	}
+
 	// Note: We avoid acquirem here so that in the fast path
 	// there is just a getg, an inlined c.Next, and a return.
 	// The performance difference on a 16-core AMD is
@@ -186,6 +203,15 @@ func maps_rand() uint64 {
 
 // mrandinit initializes the random state of an m.
 func mrandinit(mp *m) {
+	if GOOS == "darwin" && GOARCH == "arm" {
+		base := uint64(nanotime()) ^ uint64(uintptr(unsafe.Pointer(mp)))
+		mp.cheaprand = base ^ 0xa0761d6478bd642f
+		if mp.cheaprand == 0 {
+			mp.cheaprand = 1
+		}
+		return
+	}
+
 	var seed [4]uint64
 	for i := range seed {
 		seed[i] = bootstrapRand()
